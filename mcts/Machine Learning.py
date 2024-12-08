@@ -62,7 +62,7 @@ if __name__ == "__main__":
     
     mode = get_mode_from_user()
     mcts = MCTS(card_data=cards, simulations=1000, mode=mode if mode == "feature_learning" else None)
-    best_card = mcts.run(initial_hand, enemy_cards)
+    best_card = mcts.run_simulation(initial_hand, enemy_cards)
 
     print("\nYour initial hand:")
     for card in initial_hand:

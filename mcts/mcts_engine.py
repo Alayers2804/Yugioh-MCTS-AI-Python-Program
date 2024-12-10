@@ -51,7 +51,7 @@ class MCTS:
         elif self.mode == "enemy":
             for card in hand:
                 for enemy_card in enemy_cards:
-                    if card.atk > enemy_card.atk:
+                    if card.attack > enemy_card.attack:
                         total_score += card.NA 
                     else:
                         total_score -= 5  # Penalty for weaker cards
@@ -103,7 +103,6 @@ class MCTS:
         self.backpropagate(self.root, result)
         
     def determine_mode(self, enemy_cards):
-        """Determine the mode dynamically based on the presence of enemy cards."""
         if not enemy_cards:
             print("\nNo enemy cards present. Running in pure MCTS mode (your cards only).")
             return "pure"

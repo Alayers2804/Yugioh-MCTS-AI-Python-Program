@@ -14,12 +14,13 @@ effect_points_mapping = {
 }
 
 class Card:
-    def __init__(self, name, id, archetype, effect, atk, level, card_images, EP):
+    def __init__(self, name, id, archetype, effect, attack, defense, level, card_images, EP):
         self.name = name            # Card's name
         self.id = id,
         self.archetype = archetype  # Card's archetype (e.g., Dragon, Spellcaster, etc.)
         self.effect = effect        # Card's effect (description of its ability)
-        self.atk = atk              # Card's attack points
+        self.atk = attack              # Card's attack points
+        self.defense = defense
         self.level = level          # Card's level (e.g., 4, 7, 12)
         self.EP = EP                # Effect points calculated from the card's effect
         self.card_images = card_images
@@ -34,6 +35,47 @@ class Card:
     def __str__(self):
         """ Return a string representation of the card (name) """
         return self.name
+
+class MonsterCard(Card):
+    def __init__(self, name, id, archetype, effect, atk, level, card_images, EP):
+        super().__init__(name, id, archetype, effect, atk, level, card_images, EP)
+        self.position = None  # None, "attack", or "defense"
+
+    def set_position(self, position):
+        """ Set the position of the card (attack or defense) """
+        if position.lower() in {"attack", "defense"}:
+            self.position = position.lower()
+        else:
+            raise ValueError("Invalid position. Choose 'attack' or 'defense'.")
+
+    def can_play(self):
+        """ Check if the card can be played this turn """
+        return not self.played
+
+    def play_card(self):
+        """ Mark the card as played """
+        if self.can_play():
+            self.played = True
+        else:
+            raise Exception(f"Card {self.name} is already played this turn.")
+
+class SpellCard(Card):
+    def __init__(self, name, id, archetype, effect, atk, level, card_images, EP, spell_effect):
+        super().__init__(name, id, archetype, effect, atk, level, card_images, EP)
+        self.spell_effect = spell_effect  # A description of the spell's effect
+
+    def apply_effect(self, target_card):
+        """ Apply the spell's effect to a target card """
+        print(f"Applying {self.spell_effect} from {self.name} to {target_card.name}")
+        
+class TrapCard(Card):
+    def __init__(self, name, id, archetype, effect, atk, level, card_images, EP, trap_effect):
+        super().__init__(name, id, archetype, effect, atk, level, card_images, EP)
+        self.trap_effect = trap_effect  # A description of the trap's effect
+
+    def trigger(self, target_card):
+        """ Trigger the trap's effect on a target card """
+        print(f"Triggering {self.trap_effect} from {self.name} targeting {target_card.name}")
 
 def calculate_effect_points(desc):
     points = 0
@@ -66,7 +108,8 @@ def load_cards_from_csv(filepath):
             id=row['id'], 
             archetype=row.get('archetype', ''),  # Archetype might be empty
             effect=row.get('desc', ''),         # Description might be empty
-            atk=row['atk'], 
+            attack=row['atk'], 
+            defense=row['def'],
             level=row['level'], 
             EP=EP,
             card_images=row.get('card_images', '')

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Game MCTS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-beta.1/css/select2.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-beta.1/js/select2.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Yu-Gi-Oh! - MCTS Program</h1>
+    
+    <form id="mctsForm">
+
+        <div>
+        
+        <h3>Select Initial Hand:</h3>
+        <select id="initialHand" name="initial_hand" multiple="multiple" style="width: 50%;" required></select>
+        
+        <h3>Select Enemy Cards:</h3>
+        <select id="enemyCards" name="enemy_cards" multiple="multiple" style="width: 50%;"></select>
+
+        <h3>Select Mode:</h3>
+        <select name="mode" required>
+            <option value="pure">Pure</option>
+            <option value="enemy">Enemy</option>
+            <option value="feature_learning">Feature Learning</option>
+        </select>
+
+        <button type="submit">Run Simulation</button>
+    </form>
+
+    <h3>Result:</h3>
+    <pre id="result"></pre>
+
+    <button id="continueButton" type="button" style="display: none;">Continue</button>
+
+    <script>
+        $(document).ready(function() {
+            // Initialize Select2
+            const initSelect2 = (selector, placeholder) => {
+                $(selector).select2({
+                    placeholder: placeholder,
+                    minimumInputLength: 1,
+                    ajax: {
+                        url: '/get_all_cards',
+                        dataType: 'json',
+                        delay: 250,
+                        data: params => ({ q: params.term }),
+                        processResults: data => ({
+                            results: data.map(card => ({ id: card, text: card }))
+                        })
+                    }
+                });
+            };
+        
+            initSelect2('#initialHand', 'Search for initial hand cards...');
+            initSelect2('#enemyCards', 'Search for enemy cards...');
+        
+            let currentData = {}; // Store the current state
+        
+            // Handle form submission
+            $('#mctsForm').on('submit', async function(event) {
+                event.preventDefault();
+        
+                currentData = {
+                    initial_hand: $('#initialHand').val(),
+                    enemy_cards: $('#enemyCards').val(),
+                    mode: $('select[name="mode"]').val()
+                };
+        
+                await runSimulationStep(currentData);
+            });
+        
+            // Handle "Continue" button click for resetting
+            $('#continueButton').on('click', function() {
+                // Reset the form and state
+                $('#mctsForm')[0].reset(); // Reset form fields
+                $('#initialHand').val(null).trigger('change'); // Clear Select2 inputs
+                $('#enemyCards').val(null).trigger('change');
+                $('#result').empty(); // Clear results
+                currentData = {}; // Clear stored data
+                $('#continueButton').hide(); // Hide the button
+            });
+        
+            async function runSimulationStep(data) {
+                try {
+                    const response = await fetch('/machine-learning', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+            
+                    if (response.ok) {
+                        const result = await response.json();
+            
+                        if (result.step_log && Array.isArray(result.step_log)) {
+                            result.step_log.forEach(log => {
+                                if (log.played_card) {
+                                    const imageId = log.card_id;
+                                    if (imageId) {
+                                        const imageUrl = `https://images.ygoprodeck.com/images/cards/${imageId}.jpg`;
+                                        $('#result').append(`
+                                            <div>
+                                                <p>Played Card: ${log.played_card}</p>
+                                                <img src="${imageUrl}" alt="${log.played_card}" style="width:100px;height:auto;">
+                                            </div>
+                                        `);
+                                    } else {
+                                        $('#result').append(`
+                                            <div>
+                                                <p>Played Card: ${log.played_card}</p>
+                                                <p>No image available.</p>
+                                            </div>
+                                        `);
+                                    }
+                                } else if (log.message) {
+                                    $('#result').append(`<p>${log.message}</p>`);
+                                }
+                            });
+            
+                            if (result.can_continue) {
+                                $('#continueButton').show();
+                            } else {
+                                $('#continueButton').hide();
+                                $('#result').append('<p>Simulation complete.</p>');
+                            }
+                        } else {
+                            $('#result').text("No step log returned from the backend.");
+                        }
+                    } else {
+                        const errorData = await response.json();
+                        $('#result').text(`Error: ${errorData.error || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    $('#result').text("Error: " + error.message);
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>

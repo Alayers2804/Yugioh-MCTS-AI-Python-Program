@@ -14,13 +14,15 @@ effect_points_mapping = {
 }
 
 class Card:
-    def __init__(self, name, archetype, effect, atk, level, EP):
+    def __init__(self, name, id, archetype, effect, atk, level, card_images, EP):
         self.name = name            # Card's name
+        self.id = id,
         self.archetype = archetype  # Card's archetype (e.g., Dragon, Spellcaster, etc.)
         self.effect = effect        # Card's effect (description of its ability)
         self.atk = atk              # Card's attack points
         self.level = level          # Card's level (e.g., 4, 7, 12)
         self.EP = EP                # Effect points calculated from the card's effect
+        self.card_images = card_images
         self.NA = self.calculate_na()  # Card value based on the formula
 
     def calculate_na(self):
@@ -46,7 +48,7 @@ def load_cards_from_csv(filepath):
     df = pd.read_csv(filepath)
 
     # Ensure the required columns exist
-    required_columns = {'name', 'desc', 'atk', 'level', 'archetype'}
+    required_columns = {'name', 'id', 'desc', 'atk', 'level', 'archetype', 'card_images'}
     missing_columns = required_columns - set(df.columns)
     if missing_columns:
         raise ValueError(f"Missing columns in the dataset: {missing_columns}")
@@ -60,12 +62,14 @@ def load_cards_from_csv(filepath):
         EP = calculate_effect_points(row['desc'])
 
         card = Card(
-            name=row['name'], 
+            name=row['name'],
+            id=row['id'], 
             archetype=row.get('archetype', ''),  # Archetype might be empty
             effect=row.get('desc', ''),         # Description might be empty
             atk=row['atk'], 
             level=row['level'], 
-            EP=EP
+            EP=EP,
+            card_images=row.get('card_images', '')
         )
 
         cards.append(card)

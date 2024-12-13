@@ -1,10 +1,10 @@
 from flask import Flask, render_template, jsonify, request
 from mcts.mcts_engine import MCTS
-from mcts.cards import load_cards_from_csv
+from mcts.cards import load_cards_from_csv, MonsterCard, SpellCard, TokenCard, TrapCard, SkillCard
 
 app = Flask(__name__)
 
-filepath = "yugioh_cards_preprocessed.csv"
+filepath = "yugioh_cards_preprocessed_real.csv"
 cards, cards_name = load_cards_from_csv(filepath)
 
 @app.route("/")
@@ -13,12 +13,12 @@ def hello_world():
 
 @app.route('/get_all_cards', methods=['GET'])
 def get_card_names():
-    """API endpoint to return card names, optionally filtered by a query."""
+    """API endpoint to return card names with types, optionally filtered by a query."""
     query = request.args.get('q', '').lower()
     if query:  # Filter only if a query is provided
-        matching_cards = [card.name for card in cards if query in card.name.lower()]
+        matching_cards = [{"name": card.name, "type": card.type} for card in cards if query in card.name.lower()]
     else:
-        matching_cards = [card.name for card in cards]  # Return all cards
+        matching_cards = [{"name": card.name, "type": card.type} for card in cards]  # Return all cards
     return jsonify(matching_cards)
 
 @app.route('/machine-learning', methods=['POST'])
@@ -49,13 +49,21 @@ def machine_learning():
                 card_name = log["played_card"].lower()
                 card = cards_name.get(card_name)
                 print(f"Card: {card_name}, ID: {card.id if card else 'None'}")  # Debugging line
+                
+                if isinstance(card, MonsterCard):  # Check if the card is a MonsterCard
+                    position = card.position if card.position else ""  # Only for MonsterCards
+                else:
+                    position = ""  # For non-MonsterCards, use an empty string or skip
+
                 step_log_with_images.append({
-                    "played_card": card.name,
-                    "card_id": card.id if card else None
+                    "played_card": card.name if card else None,
+                    "card_id": card.id if card else None,
+                    "na_Value" : card.NA if card else None,
+                    "position": position  # Set the position only for MonsterCards
                 })
             else:
                 step_log_with_images.append(log)
-        
+
         # Return step results
         return jsonify({
             "step_log": step_log_with_images,

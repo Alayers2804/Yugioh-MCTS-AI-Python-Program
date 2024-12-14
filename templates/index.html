@@ -70,9 +70,12 @@
     
     <form id="mctsForm">
         <div>
-            <h3>Select Initial Hand:</h3>
+            <h3>Select Your Hand:</h3>
             <select id="initialHand" name="initial_hand" multiple="multiple" style="width: 100%;" required></select>
-            
+
+            <h3>Select Your Field:</h3>
+            <select id="userField" name="initial_hand" multiple="multiple" style="width: 100%;"></select>
+
             <h3>Select Enemy Cards:</h3>
             <select id="enemyCards" name="enemy_cards" multiple="multiple" style="width: 100%;"></select>
 
@@ -109,6 +112,7 @@
             };
 
             initSelect2('#initialHand', 'Search for initial hand cards...');
+            initSelect2('#userField', 'Search for your fields cards...');
             initSelect2('#enemyCards', 'Search for enemy cards...');
 
             let currentData = {}; // Store the current state
@@ -121,6 +125,7 @@
 
                 currentData = {
                     initial_hand: $('#initialHand').val(),
+                    user_field: $('#userField').val(),
                     enemy_cards: $('#enemyCards').val(),
                 };
 
@@ -136,6 +141,7 @@
             $('#resetButton').on('click', function() {
                 $('#mctsForm')[0].reset();
                 $('#initialHand').val(null).trigger('change');
+                $('#userField').val(null).trigger('change');
                 $('#enemyCards').val(null).trigger('change');
                 $('#result').empty();
                 $('#resultHeader').addClass('hidden');

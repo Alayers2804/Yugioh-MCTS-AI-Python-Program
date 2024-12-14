@@ -1,16 +1,15 @@
 import math
-import pandas as pd
-import numpy as np
 from .cards import MonsterCard, SpellCard, TrapCard
 class MCTSNode:
-    def __init__(self, card_hand, parent=None):
+    def __init__(self, card_hand, parent=None, user_field=None):
         self.card_hand = card_hand
+        self.user_field = user_field if user_field else []
         self.parent = parent
         self.children = []
+        self.card_played = None
         self.visits = 0
         self.wins = 0
-        self.card_played = None
-
+        
     def uct_value(self, exploration_factor=1.41, epsilon=1e-6):
         """Calculate the UCT value, incorporating inherent card value (like NA) for prioritization."""
         if self.visits == 0:
@@ -27,112 +26,148 @@ class MCTS:
         self.root = None
         self.mode = mode 
         self.played_monster = False
-
-    def select(self, node):
-        """Select the best node to expand based on UCT and card value."""
-        best_value = -float('inf')
-        best_node = None
-        for child in node.children:
-            uct_value = child.uct_value()
-            print(f"Card: {child.card_played.name}, UCT Value: {uct_value}, NA: {child.card_played.NA}")
-            if uct_value > best_value:
-                best_value = uct_value
-                best_node = child
-        return best_node
-
-    def expand(self, node):
-        """Generate all possible actions (cards to play from hand)."""
-        played_cards = {child.card_played for child in node.children}
-        for card in node.card_hand:
-            if card in played_cards:
-                continue  # Skip cards that have already been expanded
-            print(f"Expanding with card: {card.name} (NA={card.NA})")
-            new_hand = [c for c in node.card_hand if c != card]  # Remove the played card
-            child_node = MCTSNode(new_hand, parent=node)
-            child_node.card_played = card
-            node.children.append(child_node)
-
+        
     @staticmethod
     def determine_monster_position(card, enemy_cards):
         if not isinstance(card, MonsterCard):
-            return None  # Only MonsterCards have positions
+            return None  
 
         if not enemy_cards:
-            return "attack"  # Default to attack when there are no enemies
+            return "attack"  
 
         avg_enemy_attack = sum(c.attack for c in enemy_cards) / len(enemy_cards)
         avg_enemy_defense = sum(c.defense for c in enemy_cards) / len(enemy_cards)
 
-        # Decision logic
-        if card.attack > avg_enemy_defense:  # Strong offense
+        if card.attack > avg_enemy_defense:
             return "attack"
-        elif card.defense > avg_enemy_attack:  # Strong defense
+        elif card.defense > avg_enemy_attack:
             return "defense"
         else:  # Balanced
             return "attack" if card.attack >= card.defense else "defense"
 
+    def boost_archetype_na(self, card, user_field, user_hand, boost_value=5):
+        if not card.archetype or card.archetype.lower() in ["none", "empty"]:
+            print(f"{card.name} has an empty or None archetype. NA remains {card.NA}.")
+            return  # Skip boosting for cards with no archetype
+
+        if hasattr(card, 'boosted') and card.boosted:
+            print(f"{card.name} has already been boosted. NA remains {card.NA}.")
+            return  # Skip boosting if already done
+
+        # Check if archetype matches any card in the user field and hand
+        archetype_match_in_field = any(field_card.archetype == card.archetype for field_card in user_field)
+        archetype_match_in_hand = any(hand_card.archetype == card.archetype for hand_card in user_hand)
+
+        # Boost NA if there is an archetype match in both field and hand
+        if archetype_match_in_field and archetype_match_in_hand:
+            card.NA += boost_value
+            print(f"Boosted NA for {card.name} (archetype: {card.archetype}) by {boost_value}. New NA: {card.NA}.")
+            card.boosted = True  # Mark as boosted
+        else:
+            print(f"No archetype match found for {card.name}. NA remains {card.NA}.")
+
+    def check_enough_tributes(self, user_field, tribute_needed):
+        """Check if the user has enough cards for the tribute and return updated field."""
+        if len(user_field) < tribute_needed:
+            print(f"Not enough cards for tribute. Need {tribute_needed}, but only have {len(user_field)}.")
+            return []  # Return empty list if not enough tributes
+        return user_field  # Return the unchanged user field if there are enough tributes
+
+    def select(self, node):
+        if not node.children:
+            print("No children available to select.")
+            return None
+
+        best_value = -float('inf')
+        best_node = None
+
+        # Prioritize the highest NA value when UCT values are equal
+        for child in node.children:
+            uct_value = child.uct_value()
+            print(f"Card: {child.card_played.name}, UCT Value: {uct_value}, NA: {child.card_played.NA}")
+            
+            if uct_value > best_value or (uct_value == best_value and child.card_played.NA > best_node.card_played.NA):
+                best_value = uct_value
+                best_node = child
+
+        return best_node
+    
+    def expand(self, node):
+        monster_played = False
+        cards_to_remove = []
+
+        # Sort cards by their NA value in descending order (highest first)
+        sorted_hand = sorted(node.card_hand, key=lambda card: card.NA, reverse=True)
+
+        for card in sorted_hand:
+            if isinstance(card, MonsterCard):  # If the card is a monster card
+                if not monster_played:  # Ensure only one monster is played
+                    tribute_needed = card.requires_tribute()
+
+                    # Check if tributes are sufficient
+                    if len(node.user_field) < tribute_needed:
+                        print(f"Skipping {card.name}: Not enough tributes.")
+                        continue  # Skip playing this card if not enough tributes
+
+                    # Proceed if there are enough tributes
+                    new_field = self.check_enough_tributes(node.user_field, tribute_needed)
+                    self.boost_archetype_na(card, node.user_field, node.card_hand)
+                    child_node = MCTSNode(
+                        card_hand=[c for c in node.card_hand if c != card],  # Remove played card from hand
+                        user_field=new_field,  # Updated field
+                        parent=node
+                    )
+                    monster_played = True  # Flag that a monster has been played
+                    child_node.card_played = card
+                    node.children.append(child_node)
+                    cards_to_remove.append(card)  # Track the card to remove from hand
+
+            elif not isinstance(card, MonsterCard):  # Non-monster cards can always be played
+                if not monster_played:  # Non-monster cards can be played if no monster is already played
+                    self.boost_archetype_na(card, node.user_field, node.card_hand)
+                    child_node = MCTSNode(
+                        card_hand=[c for c in node.card_hand if c != card],  # Remove played card from hand
+                        user_field=node.user_field,
+                        parent=node
+                    )
+                    child_node.card_played = card
+                    node.children.append(child_node)
+                    cards_to_remove.append(card)  # Track the card to remove from hand
+
+        # Remove cards from hand that have been processed (played or skipped)
+        node.card_hand = [card for card in node.card_hand if card not in cards_to_remove]
+
+        if not monster_played:  # If no monster was played, you might want to ensure that at least one card is played
+            print("No monster card was played.")
+        
     def simulate(self, node, enemy_cards=None):
         hand = node.card_hand
         total_score = 0
 
         for card in hand:
+            # Ensure boosting is only done under valid conditions
+            self.boost_archetype_na(card, user_field=node.user_field, user_hand=hand)
             print(f"Card: {card.name}, NA: {card.NA}")
-
+            
             if isinstance(card, MonsterCard):
-                # Determine position during simulation but do not overwrite existing positions
-                if not card.position:
+                tribute_needed = card.requires_tribute()
+                
+                if tribute_needed > 0:
+                    # Check if the player has enough cards for the tribute before tributing
+                    if len(node.user_field) < tribute_needed:
+                        print(f"Skipping {card.name} (Level {card.level}): Not enough tributes.")
+                        continue 
+
+                    # If there are enough cards for tribute, remove them only when necessary
+                    node.user_field = self.check_enough_tributes(node.user_field, tribute_needed)
+                    
                     position = self.determine_monster_position(card, enemy_cards)
                     card.set_position(position)
-                print(f"Simulated Position for {card.name}: {card.position}")
+                    print(f"Simulated Position for {card.name}: {card.position}")
 
-            # Add card's NA to the total score
             total_score += card.NA
 
         return total_score
-
-    def evaluate_generic_card(self, card, enemy_cards):
-        """Evaluate any card except MonsterCard based on its attributes."""
-        card_score = card.NA  # Start with the base score (e.g., intrinsic value of the card)
-
-        # Example of card-specific evaluations (you can extend this based on your game logic)
-        if isinstance(card, SpellCard):
-            # Evaluate spell card (you can adjust this logic as needed)
-            if 'destroy' in card.effect.lower():
-                card_score += 20  # Add bonus for destruction effects
-            if 'buff' in card.effect.lower():
-                card_score += 15  # Add bonus for buff effects
-
-        elif isinstance(card, TrapCard):
-            # Evaluate trap card (you can adjust this logic as needed)
-            if 'counter' in card.effect.lower():
-                card_score += 25  # Bonus for counter-trap effects
-
-        # Add other card type-specific evaluation logic here as needed
-
-        return card_score
-        
-    def calculate_archetype_synergy(self, card, hand):
-        bonus = 0
-        for other_card in hand:
-            if card != other_card and card.archetype == other_card.archetype:
-                bonus += 10  # Bonus for matching archetype
-            return bonus
-
-
-    def calculate_synergy_bonus(self, card, hand):
-        bonus = 0
-        if 'spellcaster' in card.effect.lower():
-            bonus += 15 
-        bonus += self.calculate_archetype_synergy(card, hand)
-        return bonus
-
-    def feature_based_score(self, card, enemy_cards):
-        """Evaluate card based on features and interactions with enemy cards."""
-        score = card.NA
-        enemy_cards = ""
-        if 'destroy' in card.effect.lower():
-            score += 20
-        return score
 
     def backpropagate(self, node, result):
         """ Backpropagate the result of the simulation to update the nodes """
@@ -142,42 +177,57 @@ class MCTS:
             node = node.parent
     
     def process_best_move(self, moves_log, enemy_cards):
-        """Select the best move and remove the played card from the hand."""
         best_child = self.select(self.root)
+        if best_child is None:
+            print("No valid moves to process.")
+            return False
+
         played_card = best_child.card_played
 
+        # Ensure only one monster card is played
         if isinstance(played_card, MonsterCard):
-            # Determine the correct position using the provided enemy cards
-            position = self.determine_monster_position(played_card, enemy_cards)
-            played_card.set_position(position)  # Set the card's position
-
-            print(f"Card: {played_card.name}, Position: {position}")
+            tribute_needed = played_card.requires_tribute()
+            if len(self.root.user_field) < tribute_needed:
+                print(f"Cannot play {played_card.name} (Level {played_card.level}): Not enough tributes.")
+                return False
             
-            # Ensure that a Monster card can only be played once
             if self.played_monster:
                 print(f"Monster card {played_card.name} cannot be played again.")
-                return False
-            self.played_monster = True  # Mark that a Monster card has been played
+                return 
+            
+            self.played_monster = True  
+            self.root.user_field = self.check_enough_tributes(self.root.user_field, tribute_needed)
+            position = self.determine_monster_position(played_card, enemy_cards)
+            played_card.set_position(position)
 
-        # Log the move
+            print(f"Card: {played_card.name}, Position: {position}")
+
         moves_log.append({
             "played_card": played_card.name,
             "card_id": played_card.id,
             "type": played_card.type,
             "na_value": played_card.NA,
-            "position": position if isinstance(played_card, MonsterCard) else ""  # Empty for non-Monster cards
+            "position": position if isinstance(played_card, MonsterCard) else ""
         })
 
-        # Remove the played card from the hand and set it as the new root
         new_hand = [c for c in self.root.card_hand if c != played_card]
-        self.root = MCTSNode(new_hand)
+        self.root = MCTSNode(new_hand, user_field=self.root.user_field)
         return True
         
     def simulate_round(self, enemy_cards):
-        """Expand the root node, simulate results, and backpropagate."""
-        self.expand(self.root)
+        print(f"Simulating round. Cards in hand: {[card.name for card in self.root.card_hand]}")
+        print(f"User field before simulation: {[card.name for card in self.root.user_field]}")
+
+        self.expand(self.root)  # Process the card hand and expand the tree
         result = self.simulate(self.root, enemy_cards if self.mode != "pure" else [])
-        self.backpropagate(self.root, result)
+        print(f"Simulation result: {result}")
+
+        self.backpropagate(self.root, result)  # Backpropagate the result to the root
+        print("Backpropagation complete.")
+
+        # After expanding, if no valid moves were found, ensure the cards are updated
+        if not self.root.card_hand:
+            print("No cards left in the hand after processing.")
         
     def determine_mode(self, enemy_cards):
         if not enemy_cards:
@@ -187,25 +237,24 @@ class MCTS:
             print("\nEnemy cards detected. Running in MCTS with enemy consideration mode.")
             return "with_enemy"
 
-    def run_simulation(self, initial_hand, enemy_cards):
+    def run_simulation(self, initial_hand, user_field, enemy_cards):
         """Run simulations continuously until no valid moves can be made."""
         moves_log = []
 
         if self.root is None:
-            self.root = MCTSNode(initial_hand)
+            print("Initializing root node with:")
+            print(f"Initial hand: {[card.name for card in initial_hand]}")
+            print(f"User field: {[card.name for card in user_field]}")
+            self.root = MCTSNode(initial_hand, user_field=user_field)
 
         self.mode = self.determine_mode(enemy_cards)
-
-        # Run simulations until the hand is empty or no valid moves can be made
         while self.root.card_hand:
             self.simulate_round(enemy_cards)
             if not self.process_best_move(moves_log, enemy_cards):
-                break  # Exit if no valid moves are left
+                break 
 
-        # Final check for empty hand
         if not self.root.card_hand:
             moves_log.append({"message": "No cards left in your hand"})
             return {"log": moves_log, "can_continue": True}
 
         return {"log": moves_log, "can_continue": True}
-

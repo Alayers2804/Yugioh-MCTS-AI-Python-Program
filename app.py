@@ -28,20 +28,22 @@ def machine_learning():
         # Parse Input
         data = request.json
         initial_hand_names = data.get('initial_hand', [])
+        user_field = data.get("user_field", [])
         enemy_card_names = data.get('enemy_cards', [])
-        mode = data.get('mode', 'pure')
+        # mode = data.get('mode', 'pure')
 
         # Validate and Convert Input
-        initial_hand = [cards_name[name.lower()] for name in initial_hand_names if name.lower() in cards_name]
+        user_hand = [cards_name[name.lower()] for name in initial_hand_names if name.lower() in cards_name]
+        user_field = [cards_name[name.lower()] for name in user_field if name.lower() in cards_name]
         enemy_cards = [cards_name[name.lower()] for name in enemy_card_names if name.lower() in cards_name]
-        if not initial_hand:
+        if not user_hand:
             return jsonify({"error": "Initial hand is empty or invalid"}), 400
 
         # Reset the MCTS instance for a new simulation
-        mcts = MCTS(card_data=cards, simulations=1000, mode=mode if mode == "feature_learning" else None)
+        mcts = MCTS(card_data=cards, simulations=1000, mode=None)
 
         # Run one step of the simulation
-        result = mcts.run_simulation(initial_hand, enemy_cards)
+        result = mcts.run_simulation(user_hand, user_field, enemy_cards)
 
         step_log_with_images = []
         for log in result["log"]:

@@ -73,33 +73,23 @@ class MCTS:
             return []  # Return empty list if not enough tributes
         return user_field  # Return the unchanged user field if there are enough tributes
 
-    def select(self, node):
-        if not node.children:
-            print("No children available to select.")
-            return None
 
+    def select(self, node):
+        """Select the best node to expand based on UCT and card value."""
         best_value = -float('inf')
         best_node = None
-
-        # Prioritize the highest NA value when UCT values are equal
         for child in node.children:
             uct_value = child.uct_value()
             print(f"Card: {child.card_played.name}, UCT Value: {uct_value}, NA: {child.card_played.NA}")
-            
-            if uct_value > best_value or (uct_value == best_value and child.card_played.NA > best_node.card_played.NA):
+            if uct_value > best_value:
                 best_value = uct_value
                 best_node = child
-
         return best_node
     
     def expand(self, node):
         monster_played = False
-        cards_to_remove = []
 
-        # Sort cards by their NA value in descending order (highest first)
-        sorted_hand = sorted(node.card_hand, key=lambda card: card.NA, reverse=True)
-
-        for card in sorted_hand:
+        for card in node.card_hand:
             if isinstance(card, MonsterCard):  # If the card is a monster card
                 if not monster_played:  # Ensure only one monster is played
                     tribute_needed = card.requires_tribute()
@@ -120,10 +110,8 @@ class MCTS:
                     monster_played = True  # Flag that a monster has been played
                     child_node.card_played = card
                     node.children.append(child_node)
-                    cards_to_remove.append(card)  # Track the card to remove from hand
 
-            elif not isinstance(card, MonsterCard):  # Non-monster cards can always be played
-                if not monster_played:  # Non-monster cards can be played if no monster is already played
+            else:
                     self.boost_archetype_na(card, node.user_field, node.card_hand)
                     child_node = MCTSNode(
                         card_hand=[c for c in node.card_hand if c != card],  # Remove played card from hand
@@ -132,10 +120,9 @@ class MCTS:
                     )
                     child_node.card_played = card
                     node.children.append(child_node)
-                    cards_to_remove.append(card)  # Track the card to remove from hand
+                    
 
-        # Remove cards from hand that have been processed (played or skipped)
-        node.card_hand = [card for card in node.card_hand if card not in cards_to_remove]
+        node.card_hand = [card for card in node.card_hand]
 
         if not monster_played:  # If no monster was played, you might want to ensure that at least one card is played
             print("No monster card was played.")

@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 effect_points_mapping = {
     'destroy': 10,
@@ -43,10 +42,10 @@ class Card:
         self.card_images = card_images
         self.type = "Generic"       # Default type, overridden in subclasses
         self.NA = self.calculate_na()  # Initially set to None, will be calculated after type is set
+        self.targeting = False
 
     def calculate_na(self):
-        """ Calculate the card value (NA) using the default behavior (EP for non-Monster cards). """
-        return self.EP  # Non-Monster cards just return their EP value.
+        return self.EP 
 
     def __str__(self):
         """ Return a string representation of the card (name) """
@@ -54,11 +53,11 @@ class Card:
 class MonsterCard(Card):
     def __init__(self, name, id, archetype, effect, attack, defense, level, card_images, EP):
         super().__init__(name, id, archetype, effect, attack, defense, level, card_images, EP)
-        self.type = "Monster"  # Override type
-        self.position = "attack"   # None, "attack", or "defense"
+        self.type = "Monster"  
+        self.position = "attack"
 
     def calculate_na(self):
-        if self.level == 0:  # Check if level is 0 to avoid division by zero
+        if self.level == 0: 
             self.level = 1
         return (self.attack / 100) + (12 / self.level) + self.EP
 
@@ -69,6 +68,14 @@ class MonsterCard(Card):
             self.position = position.lower()
         else:
             raise ValueError("Invalid position. Choose 'attack' or 'defense'.")
+    
+    def requires_tribute(self):
+        """ Calculate how many tributes are needed based on the monster's level. """
+        if self.level >= 5 and self.level <= 6:
+            return 1  # Level 5-6 monsters need 1 tribute
+        elif self.level >= 7:
+            return 2  # Level 7+ monsters need 2 tributes
+        return 0  # No tribute needed for lower level monsters
 
     def __str__(self):
         return f"Monster Card - {self.name}"
@@ -76,15 +83,21 @@ class MonsterCard(Card):
 class SpellCard(Card):
     def __init__(self, name, id, archetype, effect, attack, defense, level, card_images, EP, spell_effect):
         super().__init__(name, id, archetype, effect, attack, defense, level, card_images, EP)
-        self.type = "Spell"  # Override type
+        self.type = "Spell"
         self.spell_effect = spell_effect
+        self.targeting = "destroy" in effect.lower() or "banish" in effect.lower()
 
-    def apply_effect(self, target_card):
-        """ Apply the spell's effect to a target card """
-        print(f"Applying {self.spell_effect} from {self.name} to {target_card.name}")
-        
+    def apply_effect(self, enemy_cards):
+        if not self.targeting:
+            print(f"{self.name} does not target enemy cards.")
+            return
+        target_card = max(enemy_cards, key=lambda card: card.NA, default=None)
+        if target_card:
+            print(f"{self.name} targets and applies {self.spell_effect} to {target_card.name} (NA: {target_card.NA}).")
+        else:
+            print("No enemy cards to target.")
+            
     def __str__(self):
-        """ Return a string representation of the spell card """
         return f"Spell Card - {self.name}"
         
 class TrapCard(Card):
@@ -92,10 +105,19 @@ class TrapCard(Card):
         super().__init__(name, id, archetype, effect, attack, defense, level, card_images, EP)
         self.type = "Trap"  # Override type
         self.trap_effect = trap_effect
+        self.targeting = "destroy" in effect.lower() or "banish" in effect.lower()
+        
+    def trigger(self, enemy_cards):
+        if not self.targeting:
+            print(f"{self.name} does not target enemy cards.")
+            return
 
-    def trigger(self, target_card):
-        """ Trigger the trap's effect on a target card """
-        print(f"Triggering {self.trap_effect} from {self.name} targeting {target_card.name}")
+        # Find the enemy card with the highest NA value
+        target_card = max(enemy_cards, key=lambda card: card.NA, default=None)
+        if target_card:
+            print(f"{self.name} triggers and applies {self.trap_effect} to {target_card.name} (NA: {target_card.NA}).")
+        else:
+            print("No enemy cards to target.")
 
     def __str__(self):
         """ Return a string representation of the trap card """

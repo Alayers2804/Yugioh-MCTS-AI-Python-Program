@@ -66,8 +66,17 @@ def machine_learning():
             else:
                 step_log_with_images.append(log)
 
-        # Return step results
+        user_hand_cards=[]
+        for card in user_hand:
+            user_hand_cards.append({
+                "card_name": card.name,
+                "card_id": card.id,
+                "na_Value": card.NA,
+                "position": ""  # Assuming no position for user hand cards
+            })
+        
         return jsonify({
+            "user_hand": user_hand_cards,
             "step_log": step_log_with_images,
             "can_continue": result["can_continue"]
         })

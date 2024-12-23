@@ -18,9 +18,12 @@
         }
         .card-container {
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: row; /* Arrange cards in a row */
+            flex-wrap: wrap; /* Allow wrapping to the next line */
             gap: 20px;
             margin-top: 20px;
+            width: 100%;
+            max-width: 800px;
         }
         .card {
             display: flex;
@@ -40,12 +43,13 @@
             width: 150px;
             height: auto;
             border-radius: 5px;
-            margin-top:10px
+            margin-top: 10px;
         }
         .card-details {
             margin-top: 10px;
             text-align: center;
         }
+        
         @keyframes slideIn {
             to {
                 opacity: 1;
@@ -84,7 +88,14 @@
     </form>
 
     <h3 id="resultHeader" class="hidden">Result:</h3>
-    <div class="card-container" id="result"></div>
+    <div id="userHandContainer" class="hidden">
+        <h4>Your Hand</h4>
+        <div class="card-container" id="userHand"></div>
+    </div>
+    <div id="playedCardsContainer" class="hidden">
+        <h4>Played Cards</h4>
+        <div class="card-container" id="playedCards"></div>
+    </div>
 
     <p id="noCardsMessage" class="hidden">No cards left in your hand.</p>
 
@@ -129,7 +140,8 @@
                     enemy_cards: $('#enemyCards').val(),
                 };
 
-                $('#result').empty();
+                $('#userHand').empty();
+                $('#playedCards').empty();
                 $('#resultHeader').addClass('hidden');
                 imagesLoaded = 0;
                 totalImages = 0;
@@ -143,8 +155,11 @@
                 $('#initialHand').val(null).trigger('change');
                 $('#userField').val(null).trigger('change');
                 $('#enemyCards').val(null).trigger('change');
-                $('#result').empty();
+                $('#userHand').empty();
+                $('#playedCards').empty();
                 $('#resultHeader').addClass('hidden');
+                $('#userHandContainer').addClass('hidden');
+                $('#playedCardsContainer').addClass('hidden');
                 currentData = {};
                 $('#resetButton').hide();
             });
@@ -160,71 +175,70 @@
                     if (response.ok) {
                         const result = await response.json();
             
-                        if (result.step_log && Array.isArray(result.step_log)) {
-                            totalImages = result.step_log.filter(log => log.card_id).length;
+                        // Clear previous results
+                        $('#userHand').empty();
+                        $('#playedCards').empty();
+                        $('#resultHeader').addClass('hidden');
+                        $('#userHandContainer').addClass('hidden'); // Hide initially
+                        $('#playedCardsContainer').addClass('hidden'); // Hide initially
             
+                        // Display user hand cards
+                        if (result.user_hand && Array.isArray(result.user_hand) && result.user_hand.length > 0) {
+                            result.user_hand.forEach(card => {
+                                const imageId = card.card_id;
+                                const imageUrl = imageId ? `https://images.ygoprodeck.com/images/cards/${imageId}.jpg` : '';
+                                const cardElement = $(`
+                                    <div class="card">
+                                        <img src="${imageUrl}" alt="${card.card_name}">
+                                        <div class="card-details">
+                                            <p><strong>${card.card_name}</strong></p>
+                                            <p>NA value: ${card.na_Value}</p>
+                                            <p>Card Position: ${card.position || 'No position'}</p>
+                                        </div>
+                                    </div>
+                                `);
+                                $('#userHand').append(cardElement);
+                            });
+                            $('#userHandContainer').removeClass('hidden'); // Show when cards exist
+                        }
+            
+                        // Display played cards
+                        if (result.step_log && Array.isArray(result.step_log) && result.step_log.length > 0) {
                             result.step_log.forEach(log => {
                                 if (log.played_card) {
                                     const imageId = log.card_id;
-                                    if (imageId) {
-                                        const imageUrl = `https://images.ygoprodeck.com/images/cards/${imageId}.jpg`;
-                                        const cardElement = $(
-                                            `<div class="card">
-                                                <img src="${imageUrl}" alt="${log.played_card}">
-                                                <div class="card-details">
-                                                    <p><strong>${log.played_card}</strong></p>
-                                                    <p>NA value: ${log.na_Value}</p>
-                                                    <p>Card Position: ${log.position || 'No position'}</p>
-                                                </div>
-                                            </div>`
-                                        );
-            
-                                        cardElement.find('img').on('load', function() {
-                                            imagesLoaded++;
-                                            if (imagesLoaded === totalImages) {
-                                                $('#resultHeader').removeClass('hidden');
-                                                if (!result.step_log.some(log => log.message)) {
-                                                    $('#noCardsMessage').addClass('hidden');
-                                                }
-                                            }
-                                        });
-            
-                                        $('#result').append(cardElement);
-                                    } else {
-                                        $('#result').append(`
-                                            <div class="card">
-                                                <div class="card-details">
-                                                    <p><strong>${log.played_card}</strong></p>
-                                                    <p>No image available.</p>
-                                                </div>
-                                            </div>`
-                                        );
-                                    }
-                                } else if (log.message) {
-                                    $('#noCardsMessage').text(log.message).removeClass('hidden');
+                                    const imageUrl = imageId ? `https://images.ygoprodeck.com/images/cards/${imageId}.jpg` : '';
+                                    const cardElement = $(`
+                                        <div class="card">
+                                            <img src="${imageUrl}" alt="${log.played_card}">
+                                            <div class="card-details">
+                                                <p><strong>${log.played_card}</strong></p>
+                                                <p>NA value: ${log.na_Value}</p>
+                                                <p>Card Position: ${log.position || 'No position'}</p>
+                                            </div>
+                                        </div>
+                                    `);
+                                    $('#playedCards').append(cardElement);
                                 }
                             });
-            
+                            $('#playedCardsContainer').removeClass('hidden'); // Show when played cards exist
+
                             if (result.can_continue) {
                                 $('#resetButton').show();
                             } else {
                                 $('#resetButton').hide();
-                                $('#result').append('<p>Simulation complete.</p>');
+                                $('#playedCards').append('<p>Simulation complete.</p>');
                             }
-            
-                            // Move the message dynamically to the correct position
-                            $('#result').append($('#noCardsMessage'));
-                        } else {
-                            $('#result').text("No step log returned from the backend.");
                         }
+                        
                     } else {
                         const errorData = await response.json();
-                        $('#result').text(`Error: ${errorData.error || 'Unknown error'}`);
+                        $('#resultContainer').text(`Error: ${errorData.error || 'Unknown error'}`);
                     }
                 } catch (error) {
-                    $('#result').text("Error: " + error.message);
+                    $('#resultContainer').text("Error: " + error.message);
                 }
-            }
+            }        
         });
     </script>
 </body>

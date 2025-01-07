@@ -145,30 +145,28 @@ class TokenCard(Card):
     def __str__(self):
         return f"Token Card - {self.name}"
 
-
-def calculate_effect_points(desc):
-    points = 0 
-    if pd.notnull(desc):  
-        desc = desc.lower()
-        desc_words = desc.split()  #
-
-        for effect, value in effect_points_mapping.items():
-            effect_words = effect.split()  
-
-            if effect_words in (desc_words[i:i + len(effect_words)] for i in range(len(desc_words) - len(effect_words) + 1)):
-                points += value  
-
-    return points 
+def calculate_effect_points(row):
+    
+    points = 0
+    for effect, value in effect_points_mapping.items():
+        if effect in row and row[effect] == 1:  # Check if the effect exists and is set to 1
+            points += value
+    return points
 
 def load_cards_from_csv(filepath):
     # Read the CSV file
     df = pd.read_csv(filepath)
 
-    # Ensure the required columns exist
     required_columns = {'name', 'id', 'desc', 'atk', 'def', 'level', 'archetype', 'card_images', 'type'}
-    missing_columns = required_columns - set(df.columns)
+    effect_columns = {'destroy', 'banish', 'draw', 'summon', 'discard', 'gain', 'lose', 'from your deck', 'inflict'}
+
+    all_required_columns = required_columns | effect_columns  # Combine both sets
+    missing_columns = all_required_columns - set(df.columns)
     if missing_columns:
         raise ValueError(f"Missing columns in the dataset: {missing_columns}")
+
+    # Calculate Effect Points (EP) based on effect columns
+    df['EP'] = df.apply(calculate_effect_points, axis=1)
 
     # Initialize card list and mapping
     cards = []
@@ -180,72 +178,69 @@ def load_cards_from_csv(filepath):
         if not normalized_type:
             raise ValueError(f"Unknown card type: {row['type']}")
 
-        # Calculate Effect Points (EP) using the 'desc' field
-        EP = calculate_effect_points(row['desc'])
-
         # Instantiate the correct card type
         if normalized_type == "Monster":
             card = MonsterCard(
                 name=row['name'],
                 id=row['id'], 
                 archetype=row.get('archetype', ''),  # Archetype might be empty
-                effect=row.get('desc', ''),         # Description might be empty
+                effect=row['desc'],                           # Description no longer used
                 attack=row['atk'], 
                 defense=row['def'],
                 level=row['level'], 
-                EP=EP,
+                EP=row['EP'],
                 card_images=row.get('card_images', '')
             )
         elif normalized_type == "Spell":
             card = SpellCard(
                 name=row['name'],
                 id=row['id'], 
-                archetype=row.get('archetype', ''),  # Archetype might be empty
-                effect=row.get('desc', ''),         # Description might be empty
+                archetype=row.get('archetype', ''),
+                effect=row['desc'],
                 attack=row['atk'], 
                 defense=row['def'],
                 level=row['level'], 
-                EP=EP,
+                EP=row['EP'],
                 card_images=row.get('card_images', ''),
-                spell_effect=row.get('desc', '')    # Spell effect derived from description
+                spell_effect=""
             )
         elif normalized_type == "Trap":
             card = TrapCard(
                 name=row['name'],
                 id=row['id'], 
-                archetype=row.get('archetype', ''),  # Archetype might be empty
-                effect=row.get('desc', ''),         # Description might be empty
+                archetype=row.get('archetype', ''),
+                effect=row['desc'],
                 attack=row['atk'], 
                 defense=row['def'],
                 level=row['level'], 
-                EP=EP,
+                EP=row['EP'],
                 card_images=row.get('card_images', ''),
-                trap_effect=row.get('desc', '')     # Trap effect derived from description
+                trap_effect=""
             )
         elif normalized_type == "Skill":
             card = SkillCard(
                 name=row['name'],
                 id=row['id'], 
-                archetype=row.get('archetype', ''),  # Archetype might be empty
-                effect=row.get('desc', ''),         # Description might be empty
+                archetype=row.get('archetype', ''),
+                effect=row['desc'],
                 attack=row['atk'], 
                 defense=row['def'],
                 level=row['level'], 
-                EP=EP,
+                EP=row['EP'],
                 card_images=row.get('card_images', ''),
-                skill_effect=row.get('desc', '')    # Skill effect derived from description
+                skill_effect=""
             )
         elif normalized_type == "Token":
             card = TokenCard(
-            name=row['name'],
-            id=row['id'], 
-            archetype=row.get('archetype', ''),  # Archetype might be empty
-            effect=row.get('desc', ''),         # Description might be empty
-            attack=row['atk'], 
-            defense=row['def'],
-            level=row['level'], 
-            EP=EP,
-            card_images=row.get('card_images', '')
+                name=row['name'],
+                id=row['id'], 
+                archetype=row.get('archetype', ''),
+                effect=row['desc'],
+                attack=row['atk'], 
+                defense=row['def'],
+                level=row['level'], 
+                EP=row['EP'],
+                card_images=row.get('card_images', '')
             )
 
         # Add the card to the list and mapping

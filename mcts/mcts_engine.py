@@ -72,6 +72,11 @@ class MCTS:
             print(f"Not enough cards for tribute. Need {tribute_needed}, but only have {len(user_field)}.")
             return []  # Return empty list if not enough tributes
         return user_field  # Return the unchanged user field if there are enough tributes
+    
+    def reset_boosted_status(self, cards):  
+        for card in cards:  
+            if hasattr(card, 'boosted'):  
+                card.boosted = False  
 
 
     def select(self, node):
@@ -127,7 +132,7 @@ class MCTS:
         if not monster_played:  # If no monster was played, you might want to ensure that at least one card is played
             print("No monster card was played.")
         
-    def simulate(self, node, enemy_cards=None):
+    def simulate(self, node):
         hand = node.card_hand
         total_score = 0
 
@@ -144,14 +149,6 @@ class MCTS:
                     if len(node.user_field) < tribute_needed:
                         print(f"Skipping {card.name} (Level {card.level}): Not enough tributes.")
                         continue 
-
-                    # If there are enough cards for tribute, remove them only when necessary
-                    node.user_field = self.check_enough_tributes(node.user_field, tribute_needed)
-                    
-                    position = self.determine_monster_position(card, enemy_cards)
-                    card.set_position(position)
-                    print(f"Simulated Position for {card.name}: {card.position}")
-
             total_score += card.NA
 
         return total_score
@@ -171,7 +168,6 @@ class MCTS:
 
         played_card = best_child.card_played
 
-        # Ensure only one monster card is played
         if isinstance(played_card, MonsterCard):
             tribute_needed = played_card.requires_tribute()
             if len(self.root.user_field) < tribute_needed:
@@ -206,7 +202,7 @@ class MCTS:
         print(f"User field before simulation: {[card.name for card in self.root.user_field]}")
 
         self.expand(self.root)  # Process the card hand and expand the tree
-        result = self.simulate(self.root, enemy_cards if self.mode != "pure" else [])
+        result = self.simulate(self.root)
         print(f"Simulation result: {result}")
 
         self.backpropagate(self.root, result)  # Backpropagate the result to the root
@@ -227,6 +223,9 @@ class MCTS:
     def run_simulation(self, initial_hand, user_field, enemy_cards):
         """Run simulations continuously until no valid moves can be made."""
         moves_log = []
+        
+        self.reset_boosted_status(initial_hand)  
+        self.reset_boosted_status(user_field)  
 
         if self.root is None:
             print("Initializing root node with:")

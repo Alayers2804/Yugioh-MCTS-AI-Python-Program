@@ -42,7 +42,9 @@ class Card:
         self.card_images = card_images
         self.type = "Generic"       # Default type, overridden in subclasses
         self.NA = self.calculate_na()  # Initially set to None, will be calculated after type is set
-        self.targeting = False
+        self.default_na = self.NA  # Store the default NA value  
+        self.targeting = False  
+        self.boosted = False  
 
     def calculate_na(self):
         return self.EP 

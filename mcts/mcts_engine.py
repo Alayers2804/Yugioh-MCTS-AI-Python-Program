@@ -1,5 +1,5 @@
 import math
-from .cards import MonsterCard, SpellCard, TrapCard
+from .Cards import MonsterCard, SpellCard, TrapCard
 class MCTSNode:
     def __init__(self, card_hand, parent=None, user_field=None):
         self.card_hand = card_hand
@@ -45,39 +45,64 @@ class MCTS:
         else:  # Balanced
             return "attack" if card.attack >= card.defense else "defense"
 
-    def boost_archetype_na(self, card, user_field, user_hand, boost_value=5):
-        if not card.archetype or card.archetype.lower() in ["none", "empty"]:
-            print(f"{card.name} has an empty or None archetype. NA remains {card.NA}.")
-            return  # Skip boosting for cards with no archetype
+    def boost_archetype_na(self, card, user_field, user_hand, boost_value=5):  
+        # Check if user_field is empty  
+        if not user_field:  
+            print(f"User field is empty. Skipping boost for {card.name}.")  
+            return  # Skip boosting if user_field is empty  
+    
+        # Reset NA to its default value before boosting  
+        default_na_value = card.default_na if hasattr(card, 'default_na') else card.NA  # Assuming 'default_na' holds the default value  
+        card.NA = default_na_value  
+        print(f"Reset NA for {card.name} to default value: {card.NA}.")  
+    
+        if not card.archetype or card.archetype.lower() in ["none", "empty"]:  
+            print(f"{card.name} has an empty or None archetype. NA remains {card.NA}.")  
+            return  # Skip boosting for cards with no archetype  
+    
+        if hasattr(card, 'boosted') and card.boosted:  
+            print(f"{card.name} has already been boosted. NA remains {card.NA}.")  
+            return  # Skip boosting if already done  
+    
+        # Check if archetype matches any card in the user field and hand  
+        archetype_match_in_field = any(field_card.archetype == card.archetype for field_card in user_field)  
+        archetype_match_in_hand = any(hand_card.archetype == card.archetype for hand_card in user_hand)  
+    
+        # Boost NA if there is an archetype match in both field and hand  
+        if archetype_match_in_field and archetype_match_in_hand:  
+            card.NA += boost_value  
+            print(f"Boosted NA for {card.name} (archetype: {card.archetype}) by {boost_value}. New NA: {card.NA}.")  
+            card.boosted = True  # Mark as boosted  
+        else:  
+            print(f"No archetype match found for {card.name}. NA remains {card.NA}.")  
 
-        if hasattr(card, 'boosted') and card.boosted:
-            print(f"{card.name} has already been boosted. NA remains {card.NA}.")
-            return  # Skip boosting if already done
-
-        # Check if archetype matches any card in the user field and hand
-        archetype_match_in_field = any(field_card.archetype == card.archetype for field_card in user_field)
-        archetype_match_in_hand = any(hand_card.archetype == card.archetype for hand_card in user_hand)
-
-        # Boost NA if there is an archetype match in both field and hand
-        if archetype_match_in_field and archetype_match_in_hand:
-            card.NA += boost_value
-            print(f"Boosted NA for {card.name} (archetype: {card.archetype}) by {boost_value}. New NA: {card.NA}.")
-            card.boosted = True  # Mark as boosted
-        else:
-            print(f"No archetype match found for {card.name}. NA remains {card.NA}.")
 
     def check_enough_tributes(self, user_field, tribute_needed):
         """Check if the user has enough cards for the tribute and return updated field."""
         if len(user_field) < tribute_needed:
             print(f"Not enough cards for tribute. Need {tribute_needed}, but only have {len(user_field)}.")
-            return []  # Return empty list if not enough tributes
-        return user_field  # Return the unchanged user field if there are enough tributes
+            return []
+        return user_field  
     
     def reset_boosted_status(self, cards):  
         for card in cards:  
+            # Debugging before resetting  
             if hasattr(card, 'boosted'):  
-                card.boosted = False  
-
+                print(f"Before Reset: {card.name} - boosted: {card.boosted}, NA: {card.NA}")  
+    
+            # Reset the boosted status  
+            if hasattr(card, 'boosted'):  
+                card.boosted = False  # Reset the boosted status  
+    
+            # Reset NA to its default value  
+            if hasattr(card, 'default_na'):  
+                card.NA = card.default_na  # Assign the default NA value  
+                print(f"Reset NA for {card.name} to its default value: {card.NA}.")  
+            else:  
+                print(f"{card.name} does not have a default NA value. NA remains: {card.NA}.")  
+    
+            # Debugging after resetting  
+            print(f"After Reset: {card.name} - boosted: {card.boosted}, NA: {card.NA}")  
 
     def select(self, node):
         """Select the best node to expand based on UCT and card value."""
@@ -95,7 +120,7 @@ class MCTS:
         monster_played = False
 
         for card in node.card_hand:
-            if isinstance(card, MonsterCard):  # If the card is a monster card
+            if isinstance(card, MonsterCard):
                 if not monster_played:  # Ensure only one monster is played
                     tribute_needed = card.requires_tribute()
 
@@ -129,7 +154,7 @@ class MCTS:
 
         node.card_hand = [card for card in node.card_hand]
 
-        if not monster_played:  # If no monster was played, you might want to ensure that at least one card is played
+        if not monster_played:
             print("No monster card was played.")
         
     def simulate(self, node):
@@ -137,18 +162,6 @@ class MCTS:
         total_score = 0
 
         for card in hand:
-            # Ensure boosting is only done under valid conditions
-            self.boost_archetype_na(card, user_field=node.user_field, user_hand=hand)
-            print(f"Card: {card.name}, NA: {card.NA}")
-            
-            if isinstance(card, MonsterCard):
-                tribute_needed = card.requires_tribute()
-                
-                if tribute_needed > 0:
-                    # Check if the player has enough cards for the tribute before tributing
-                    if len(node.user_field) < tribute_needed:
-                        print(f"Skipping {card.name} (Level {card.level}): Not enough tributes.")
-                        continue 
             total_score += card.NA
 
         return total_score
@@ -224,8 +237,7 @@ class MCTS:
         """Run simulations continuously until no valid moves can be made."""
         moves_log = []
         
-        self.reset_boosted_status(initial_hand)  
-        self.reset_boosted_status(user_field)  
+        self.reset_boosted_status(initial_hand)
 
         if self.root is None:
             print("Initializing root node with:")

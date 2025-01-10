@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from mcts.mcts_engine import MCTS
-from mcts.cards import load_cards_from_csv, MonsterCard, SpellCard, TokenCard, TrapCard, SkillCard
+from mcts.Cards import load_cards_from_csv, MonsterCard, SpellCard, TokenCard, TrapCard, SkillCard
 
 app = Flask(__name__)
 

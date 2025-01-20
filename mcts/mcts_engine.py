@@ -117,14 +117,11 @@ class MCTS:
         return best_node
     
     def expand(self, node):
-        monster_played = False
 
         for card in node.card_hand:
             if isinstance(card, MonsterCard):
-                if not monster_played:  # Ensure only one monster is played
+                if not self.played_monster:  # Ensure only one monster is played
                     tribute_needed = card.requires_tribute()
-
-                    # Check if tributes are sufficient
                     if len(node.user_field) < tribute_needed:
                         print(f"Skipping {card.name}: Not enough tributes.")
                         continue  # Skip playing this card if not enough tributes
@@ -137,10 +134,8 @@ class MCTS:
                         user_field=new_field,  # Updated field
                         parent=node
                     )
-                    monster_played = True  # Flag that a monster has been played
                     child_node.card_played = card
                     node.children.append(child_node)
-
             else:
                     self.boost_archetype_na(card, node.user_field, node.card_hand)
                     child_node = MCTSNode(
@@ -154,14 +149,34 @@ class MCTS:
 
         node.card_hand = [card for card in node.card_hand]
 
-        if not monster_played:
+        if not self.played_monster:
             print("No monster card was played.")
         
-    def simulate(self, node):
+    def simulate(self, node, enemy_cards=None):
         hand = node.card_hand
         total_score = 0
 
         for card in hand:
+            # Ensure boosting is only done under valid conditions
+            self.boost_archetype_na(card, user_field=node.user_field, user_hand=hand)
+            print(f"Card: {card.name}, NA: {card.NA}")
+            
+            if isinstance(card, MonsterCard):
+                tribute_needed = card.requires_tribute()
+                
+                if tribute_needed > 0:
+                    # Check if the player has enough cards for the tribute before tributing
+                    if len(node.user_field) < tribute_needed:
+                        print(f"Skipping {card.name} (Level {card.level}): Not enough tributes.")
+                        continue 
+
+                    # If there are enough cards for tribute, remove them only when necessary
+                    node.user_field = self.check_enough_tributes(node.user_field, tribute_needed)
+                    
+                    position = self.determine_monster_position(card, enemy_cards)
+                    card.set_position(position)
+                    print(f"Simulated Position for {card.name}: {card.position}")
+
             total_score += card.NA
 
         return total_score
@@ -185,30 +200,28 @@ class MCTS:
             tribute_needed = played_card.requires_tribute()
             if len(self.root.user_field) < tribute_needed:
                 print(f"Cannot play {played_card.name} (Level {played_card.level}): Not enough tributes.")
-                return False
-            
-            if self.played_monster:
-                print(f"Monster card {played_card.name} cannot be played again.")
-                return 
-            
-            self.played_monster = True  
+                return False  # Skip if not enough tributes
+            self.played_monster = True
             self.root.user_field = self.check_enough_tributes(self.root.user_field, tribute_needed)
             position = self.determine_monster_position(played_card, enemy_cards)
             played_card.set_position(position)
 
-            print(f"Card: {played_card.name}, Position: {position}")
+            print(f"Played monster card: {played_card.name}, Position: {position}")
 
+        # Record the played card in the log
         moves_log.append({
             "played_card": played_card.name,
             "card_id": played_card.id,
             "type": played_card.type,
             "na_value": played_card.NA,
-            "position": position if isinstance(played_card, MonsterCard) else ""
+            "position": played_card.position if isinstance(played_card, MonsterCard) else ""
         })
 
+        # Update the root node
         new_hand = [c for c in self.root.card_hand if c != played_card]
         self.root = MCTSNode(new_hand, user_field=self.root.user_field)
         return True
+
         
     def simulate_round(self, enemy_cards):
         print(f"Simulating round. Cards in hand: {[card.name for card in self.root.card_hand]}")
